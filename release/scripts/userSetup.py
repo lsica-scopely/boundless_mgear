@@ -44,29 +44,29 @@ def mGear_menu_loader():
     import mgear.rigbits.menu
     mgear.rigbits.menu.install()
 
-    # Install Animbits Menu
-    import mgear.animbits.menu
-    mgear.animbits.menu.install()
+    # # Install Animbits Menu
+    # import mgear.animbits.menu
+    # mgear.animbits.menu.install()
 
-    # Install CFXbits Menu
-    import mgear.cfxbits.menu
-    mgear.cfxbits.menu.install()
+    # # Install CFXbits Menu
+    # import mgear.cfxbits.menu
+    # mgear.cfxbits.menu.install()
 
-    # Install Crank Menu
-    import mgear.crank.menu
-    mgear.crank.menu.install()
+    # # Install Crank Menu
+    # import mgear.crank.menu
+    # mgear.crank.menu.install()
 
     # Install Anim Picker Menu
     import mgear.anim_picker.menu
     mgear.anim_picker.menu.install()
 
-    # Install Synoptic Menu
-    import mgear.synoptic.menu
-    mgear.synoptic.menu.install()
+    # # Install Synoptic Menu
+    # import mgear.synoptic.menu
+    # mgear.synoptic.menu.install()
 
-    # Install Flex Menu
-    import mgear.flex.menu
-    mgear.flex.menu.install()
+    # # Install Flex Menu
+    # import mgear.flex.menu
+    # mgear.flex.menu.install()
 
     # Install Utilities Menu
     import mgear.menu
