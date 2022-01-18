@@ -5,6 +5,8 @@
 .project
 .pydevproject
 
+.qt_for_python
+
 # File extension
 *.py[cod]
 
