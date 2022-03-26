@@ -64,7 +64,7 @@ class Guide(guide.ComponentGuide):
         self.pFkRefArray = self.addParam("fkrefarray", "string", "")
         self.pIkRefArray = self.addParam("ikrefarray", "string", "")
         self.pUpvRefArray = self.addParam("upvrefarray", "string", "")
-        self.pMaxStretch = self.addParam("maxstretch", "double", 2, 1, None)
+        self.pMaxStretch = self.addParam("maxstretch", "double", 5, 1, None)
         self.pElbowThickness = self.addParam("elbow", "double", 0, 0, None)
         # Divisions
         self.pDiv0 = self.addParam("div0", "long", 3, 1, None)

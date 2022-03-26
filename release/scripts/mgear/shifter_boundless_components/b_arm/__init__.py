@@ -37,8 +37,8 @@ class Component(component.Main):
     def addObjects(self):
         """Add all the objects needed to create the component."""
 
-        self.normal = self.getNormalFromPos(self.guide.apos)
-        self.binormal = self.getBiNormalFromPos(self.guide.apos)
+        forward = ( self.guide.apos[1] - self.guide.apos[0] ).normal()
+        self.normal =  forward.cross( datatypes.Vector( 0, 0, -1 )) # Left Vector
 
         self.length0 = vector.getDistance(
             self.guide.apos[0], self.guide.apos[1])
@@ -84,6 +84,7 @@ class Component(component.Main):
                                    po=po_off,
                                    tp=self.parentCtlTag)
         attribute.setKeyableAttributes(self.fk0_ctl)
+        
         # *ms* add fk roll control Simage style
         po_off = datatypes.Vector(.85 * self.length0 * self.n_factor, 0, 0)
         self.fk0_roll_ctl = self.addCtl(self.fk0_ctl,
@@ -182,7 +183,9 @@ class Component(component.Main):
                                    tp=self.fk1_roll_ctl)
         attribute.setKeyableAttributes(self.fk2_ctl)
 
-        self.fk_ctl = [self.fk0_roll_ctl, self.fk1_mtx, self.fk2_ctl]
+        # self.fk_ctl = [self.fk0_roll_ctl, self.fk1_mtx, self.fk2_ctl]
+        self.fk_ctl = [self.fk0_roll_ctl, self.fk1_roll_ctl, self.fk2_ctl]
+
         self.fk_ctls = [self.fk0_ctl,
                         self.fk0_roll_ctl,
                         self.fk1_ctl,
@@ -206,18 +209,12 @@ class Component(component.Main):
             w=self.size * .12, tp=self.parentCtlTag)
         attribute.setInvertMirror(self.ikcns_ctl, ["tx", "ty", "tz"])
 
-        if self.negate:
-            m = transform.getTransformLookingAt(self.guide.pos["wrist"],
-                                                self.guide.pos["eff"],
-                                                self.normal,
-                                                "x-y",
-                                                True)
-        else:
-            m = transform.getTransformLookingAt(self.guide.pos["wrist"],
-                                                self.guide.pos["eff"],
-                                                self.normal,
-                                                "xy",
-                                                False)
+        m = transform.getTransformLookingAt(self.guide.pos["wrist"],
+                                            self.guide.pos["eff"],
+                                            self.normal,
+                                            "x-y" if self.negate else "xy",
+                                            self.negate)
+
         self.ik_ctl = self.addCtl(self.ikcns_ctl,
                                   "ik_ctl",
                                   m,
@@ -227,6 +224,7 @@ class Component(component.Main):
                                   h=self.size * .12,
                                   d=self.size * .12,
                                   tp=self.ikcns_ctl)
+
         attribute.setKeyableAttributes(self.ik_ctl)
         attribute.setInvertMirror(self.ik_ctl, ["tx", "ry", "rz"])
 
@@ -375,9 +373,9 @@ class Component(component.Main):
         # We have at least one division at the start, the end and one for the
         # elbow. + 2 for elbow angle control
         # separate up and dn limb
-        self.divisions = self.settings["div0"] + self.settings["div1"] + 3 + 2
-        self.divisions0 = self.settings["div0"] + 2
-        self.divisions1 = self.settings["div1"] + 2
+        self.divisions0 = self.settings["div0"] + 1
+        self.divisions1 = self.settings["div1"] + 1
+        self.divisions = self.divisions0 + self.divisions1 + 1
 
         self.div_cns = []
         self.div_cnsUp = []
@@ -389,110 +387,82 @@ class Component(component.Main):
             self.getName("div_org"),
             transform.getTransform(self.root))
         self.previousTag = self.parentCtlTag
-        for i in range(self.divisions0):
 
+        for i in range(self.divisions0):
             div_cns = primitive.addTransform(
                 self.div_org, self.getName("div%s_loc" % i))
 
-            if self.negate:
-                div_ctl = self.addCtl(
-                    div_cns,
-                    self.getName("div%s_ctl" % i),
-                    transform.getTransform(div_cns),
-                    self.color_fk, "square", d=self.size * .05,
-                    w=self.size * .1,
-                    po=datatypes.Vector(0, self.size * -0.05, 0),
-                    ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                    tp=self.previousTag)
-            else:
-                div_ctl = self.addCtl(
-                    div_cns,
-                    self.getName("div%s_ctl" % i),
-                    transform.getTransform(div_cns),
-                    self.color_fk,
-                    "square",
-                    d=self.size * .05,
-                    w=self.size * .1,
-                    po=datatypes.Vector(0, self.size * 0.05, 0),
-                    ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                    tp=self.previousTag)
+            div_ctl = self.addCtl(
+                div_cns,
+                self.getName("div%s_ctl" % i),
+                transform.getTransform(div_cns),
+                self.color_fk, "square", d=self.size * .05,
+                w=self.size * .1,
+                po=datatypes.Vector(0, self.size * 0.05 * ( -1 if self.negate else 1 ), 0),
+                ro=datatypes.Vector(0, 0, datatypes.radians(90)),
+                tp=self.previousTag)
+
             attribute.setKeyableAttributes(div_ctl)
             self.previousTag = div_ctl
             self.div_cns.append(div_cns)
             self.div_cnsUp.append(div_cns)
             self.jnt_pos.append([div_ctl, i])
             self.div_ctls.append(div_ctl)
+
         # mid division
         d = self.divisions0
         self.div_mid = primitive.addTransform(
             self.div_org,
             self.getName("div%s_loc" % d),
             transform.getTransform(self.mid_ctl))
-        if self.negate:
-            self.div_mid_ctl = self.addCtl(
-                self.div_mid,
-                self.getName("div%s_ctl" % d),
-                transform.getTransform(self.div_mid),
-                self.color_fk,
-                "square",
-                d=self.size * .05,
-                w=self.size * .1,
-                po=datatypes.Vector(0, self.size * -0.05, 0),
-                ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                tp=self.previousTag)
-        else:
-            self.div_mid_ctl = self.addCtl(
-                self.div_mid, self.getName("div%s_ctl" % d),
-                transform.getTransform(self.div_mid),
-                self.color_fk,
-                "square",
-                d=self.size * .05,
-                w=self.size * .1,
-                po=datatypes.Vector(0, self.size * 0.05, 0),
-                ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                tp=self.previousTag)
+
+        self.div_mid_ctl = self.addCtl(
+            self.div_mid,
+            self.getName("div%s_ctl" % d),
+            transform.getTransform(self.div_mid),
+            self.color_fk,
+            "square",
+            d=self.size * .05,
+            w=self.size * .1,
+            po=datatypes.Vector(0, self.size * 0.05 * ( -1 if self.negate else 1 ), 0),
+            ro=datatypes.Vector(0, 0, datatypes.radians(90)),
+            tp=self.previousTag)
+
         attribute.setKeyableAttributes(self.div_mid_ctl)
         self.previousTag = div_ctl
 
         self.div_cns.append(self.div_mid)
+
+        self.div_cnsUp.append(self.div_mid)
+        self.div_cnsDn.append(self.div_mid)
+        
         self.jnt_pos.append([self.div_mid_ctl, self.divisions0])
         self.div_ctls.append(self.div_mid_ctl)
+
         # down division
         for i in range(self.divisions1):
-
-            dd = i + self.divisions1 + 1
+            dd = i + self.divisions1 + 2
             div_cns = primitive.addTransform(
                 self.div_org, self.getName("div%s_loc" % dd))
-            if self.negate:
-                div_ctl = self.addCtl(
-                    div_cns,
-                    self.getName("div%s_ctl" % dd),
-                    transform.getTransform(div_cns),
-                    self.color_fk,
-                    "square",
-                    d=self.size * .05,
-                    w=self.size * .1,
-                    po=datatypes.Vector(0, self.size * -0.05, 0),
-                    ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                    tp=self.previousTag)
-            else:
-                div_ctl = self.addCtl(
-                    div_cns,
-                    self.getName("div%s_ctl" % dd),
-                    transform.getTransform(div_cns),
-                    self.color_fk,
-                    "square",
-                    d=self.size * .05,
-                    w=self.size * .1,
-                    po=datatypes.Vector(0, self.size * 0.05, 0),
-                    ro=datatypes.Vector(0, 0, datatypes.radians(90)),
-                    tp=self.previousTag)
+
+            div_ctl = self.addCtl(
+                div_cns,
+                self.getName("div%s_ctl" % dd),
+                transform.getTransform(div_cns),
+                self.color_fk,
+                "square",
+                d=self.size * .05,
+                w=self.size * .1,
+                po=datatypes.Vector(0, self.size * 0.05 * ( -1 if self.negate else 1 ), 0),
+                ro=datatypes.Vector(0, 0, datatypes.radians(90)),
+                tp=self.previousTag)
+
             attribute.setKeyableAttributes(div_ctl)
             self.previousTag = div_ctl
 
             self.div_cns.append(div_cns)
             self.div_cnsDn.append(div_cns)
-            self.jnt_pos.append([div_ctl, i + self.divisions0 + 1])
+            self.jnt_pos.append([div_ctl, self.divisions0 + 1 + i])
             self.div_ctls.append(div_ctl)
 
         # End reference ------------------------------------
@@ -718,22 +688,13 @@ class Component(component.Main):
         pm.disconnectAttr(self.eff_npo.scale)
         # auto upvector -------------------------------------
 
-        if self.negate:
-            o_node = applyop.aimCns(self.upv_auv,
-                                    self.ik_ctl,
-                                    axis="-xy",
-                                    wupType=4,
-                                    wupVector=[0, 1, 0],
-                                    wupObject=self.upv_auv,
-                                    maintainOffset=False)
-        else:
-            o_node = applyop.aimCns(self.upv_auv,
-                                    self.ik_ctl,
-                                    axis="xy",
-                                    wupType=4,
-                                    wupVector=[0, 1, 0],
-                                    wupObject=self.upv_auv,
-                                    maintainOffset=False)
+        o_node = applyop.aimCns(self.upv_auv,
+                                self.ik_ctl,
+                                axis="-xy" if self.negate else "xy",
+                                wupType=4,
+                                wupVector=[0, 1, 0],
+                                wupObject=self.upv_auv,
+                                maintainOffset=False)
 
         o_node = applyop.gear_mulmatrix_op(
             self.upv_auv.attr("worldMatrix"),
@@ -758,6 +719,7 @@ class Component(component.Main):
         pm.connectAttr(dm_node + ".outputTranslate",
                        self.fk0_mtx.attr("translate"))
         pm.connectAttr(dm_node + ".outputRotate", self.fk0_mtx.attr("rotate"))
+
         # fk1 loc connect to fk1 ref @ pos and rot, not scl to avoid shearing
         o_node = applyop.gear_mulmatrix_op(
             self.fk1_ref.attr("worldMatrix"),
@@ -770,6 +732,7 @@ class Component(component.Main):
         # fk1 mtx orient cns to fk1 roll
         pm.connectAttr(self.fk1_roll_ctl.attr("rotate"),
                        self.fk1_mtx.attr("rotate"))
+
         # fk2_loc position constraint to effector------------------------
         o_node = applyop.gear_mulmatrix_op(
             self.eff_npo.attr("worldMatrix"),
@@ -778,6 +741,7 @@ class Component(component.Main):
         pm.connectAttr(o_node + ".output", dm_node + ".inputMatrix")
         pm.connectAttr(dm_node + ".outputTranslate",
                        self.fk2_loc.attr("translate"))
+                       
         # fk2_loc rotation constraint to bone1 (bugfixed) --------------
         o_node = applyop.gear_mulmatrix_op(
             self.bone1.attr("worldMatrix"),
@@ -833,16 +797,11 @@ class Component(component.Main):
         attribute.setRotOrder(self.tws3_rot, "XYZ")
 
         # elbow thickness connection
-        if self.negate:
-            o_node = node.createMulNode(
-                [self.elbow_thickness_att, self.elbow_thickness_att],
-                [0.5, -0.5, 0],
-                [self.tws1_loc + ".translateX", self.tws2_loc + ".translateX"])
-        else:
-            o_node = node.createMulNode(
-                [self.elbow_thickness_att, self.elbow_thickness_att],
-                [-0.5, 0.5, 0],
-                [self.tws1_loc + ".translateX", self.tws2_loc + ".translateX"])
+        o_node = node.createMulNode(
+            [self.elbow_thickness_att, self.elbow_thickness_att],
+            [0.5, -0.5, 0] if self.negate else [-0.5, 0.5, 0.0],
+            [self.tws1_loc + ".translateX", self.tws2_loc + ".translateX"])
+
 
         # connect both tws1 and tws2  (mid tws)
         self.tws0_rot.setAttr("sx", .001)
@@ -859,22 +818,14 @@ class Component(component.Main):
         # Roll Shoulder--use aimconstraint withour uovwctor to solve
         # the stable twist
 
-        if self.negate:
-            o_node = applyop.aimCns(self.tws0_loc,
-                                    self.mid_ctl,
-                                    axis="-xy",
-                                    wupType=4,
-                                    wupVector=[0, 1, 0],
-                                    wupObject=self.tws0_npo,
-                                    maintainOffset=False)
-        else:
-            o_node = applyop.aimCns(self.tws0_loc,
-                                    self.mid_ctl,
-                                    axis="xy",
-                                    wupType=4,
-                                    wupVector=[0, 1, 0],
-                                    wupObject=self.tws0_npo,
-                                    maintainOffset=False)
+        o_node = applyop.aimCns(self.tws0_loc,
+                                self.mid_ctl,
+                                axis="-xy" if self.negate else "xy",
+                                wupType=4,
+                                wupVector=[0, 1, 0],
+                                wupObject=self.tws0_npo,
+                                maintainOffset=False)
+
 
         # Volume -------------------------------------------
         distA_node = node.createDistNode(self.tws0_loc, self.tws1_npo)
@@ -909,57 +860,46 @@ class Component(component.Main):
         scl_1_perc = []
         scl_2_perc = []
 
-        for i, div_cnsUp in enumerate(self.div_cnsUp):
+        for i, div_cnsUp in enumerate(self.div_cnsUp[:-1]):
 
-            if i < (self.settings["div0"] + 1):
-                perc = i / (self.settings["div0"] + 1.0)
-            elif i < (self.settings["div0"] + 2):
-                perc = .95
-
-            perc = max(.001, min(.99, perc))
+            perc = i / ( self.settings["div0"] + 1 )
 
             # Roll
-            if self.negate:
-                o_node = applyop.gear_rollsplinekine_op(
-                    div_cnsUp, [self.tws1_rot, self.tws0_rot], 1 - perc, 20)
-
-            else:
-                o_node = applyop.gear_rollsplinekine_op(
-                    div_cnsUp, [self.tws0_rot, self.tws1_rot], perc, 20)
+            o_node = applyop.gear_rollsplinekine_op(
+                div_cnsUp, 
+                [self.tws1_rot, self.tws0_rot] if self.negate else [self.tws0_rot, self.tws1_rot], 
+                1 - perc if self.negate else perc, 
+                20)
 
             pm.connectAttr(self.resample_att, o_node + ".resample")
             pm.connectAttr(self.absolute_att, o_node + ".absolute")
 
             scl_1_perc.append(perc / 2)
             scl_2_perc.append(perc)
+
         scl_1_perc.append(0.5)
         scl_2_perc.append(1)
-        for i, div_cnsDn in enumerate(self.div_cnsDn):
 
-            if i == (0):
-                perc = .05
-            elif i < (self.settings["div1"] + 1):
-                perc = i / (self.settings["div1"] + 1.0)
-            elif i < (self.settings["div1"] + 2):
-                perc = .95
+        for i, div_cnsDn in enumerate(self.div_cnsDn[1:]):
 
-            perc = max(.001, min(.990, perc))
+            perc = i / ( self.settings["div0"] + 1 )
 
             # Roll
-            if self.negate:
-                o_node = applyop.gear_rollsplinekine_op(
-                    div_cnsDn, [self.tws3_rot, self.tws2_rot], 1 - perc, 20)
+            o_node = applyop.gear_rollsplinekine_op(
+                div_cnsDn
+                , [self.tws3_rot, self.tws2_rot] if self.negate else [self.tws2_rot, self.tws3_rot]
+                , 1 - perc if self.negate else perc
+                , 20)
 
-            else:
-                o_node = applyop.gear_rollsplinekine_op(
-                    div_cnsDn, [self.tws2_rot, self.tws3_rot], perc, 20)
             pm.connectAttr(self.resample_att, o_node + ".resample")
             pm.connectAttr(self.absolute_att, o_node + ".absolute")
 
             scl_1_perc.append(perc / 2 + 0.5)
             scl_2_perc.append(1 - perc)
+
         # Squash n Stretch
         for i, div_cns in enumerate(self.div_cns):
+
             o_node = applyop.gear_squashstretch2_op(
                 div_cns, None, pm.getAttr(self.volDriver_att), "x")
             pm.connectAttr(self.volume_att, o_node + ".blend")
@@ -1005,12 +945,12 @@ class Component(component.Main):
     def setRelation(self):
         """Set the relation beetween object from guide to rig"""
         self.relatives["root"] = self.div_cns[0]
-        self.relatives["elbow"] = self.div_cns[self.settings["div0"] + 2]
+        self.relatives["elbow"] = self.div_cns[self.settings["div0"] + 1]
         self.relatives["wrist"] = self.div_cns[-1]
         self.relatives["eff"] = self.eff_loc
 
         self.jointRelatives["root"] = 0
-        self.jointRelatives["elbow"] = self.settings["div0"] + 2
+        self.jointRelatives["elbow"] = self.settings["div0"] + 1
         self.jointRelatives["wrist"] = len(self.div_cns) - 1
         self.jointRelatives["eff"] = -1
 

@@ -210,7 +210,7 @@ class Plebes():
     def import_guides(self, what):
         """Import mGear's Biped Template guides
         """
-        if pm.objExists('guide'):
+        if self.check_for_guides():
             pm.warning("There is already a guide in the scene. Skipping!")
         else:
             io.import_sample_template("biped.sgt")
@@ -258,7 +258,7 @@ class Plebes():
         """Align the mGear guide to character based on the selected template
         """
         # Sanity checking
-        if not pm.objExists('guide'):
+        if not self.check_for_guides():
             pm.warning("You need to import guides first")
             return False
         if not pm.objExists(self.template.get('root')):
@@ -346,6 +346,7 @@ class Plebes():
     def attach_to_rig(self, nothing):
         """Attach the plebe to the mGear rig
         """
+        
         # Sanity checking
         if not pm.objExists(self.template.get('root')):
             pm.warning("Unable to find '{character}' in scene! ".format(
@@ -355,8 +356,15 @@ class Plebes():
         warnings = False
 
         for pairs in self.template.get('joints'):
-            for source, target in pairs.items():
-                if not pm.objExists(target.get('joint')):
+            for target, sources in pairs.items():
+                
+                if not sources:
+                    continue
+
+                if type(sources) == dict:
+                    sources = [sources]
+
+                if not pm.objExists(target):
                     warnings = True
                     pm.warning("Joint '{joint}' not found, so it won't be "
                                "connected to the rig.".format(
@@ -364,32 +372,34 @@ class Plebes():
                                )
                                )
                     continue
-                self.clear_transforms(target.get('joint'))
-                if target.get('constrain')[0] == "1" and target.get('constrain')[1] == "1":
-                    pm.parentConstraint(
-                        source,
-                        target.get('joint'),
-                        maintainOffset=True,
-                        decompRotationToChild=True
-                    )
-                elif target.get('constrain')[0] == "1":
-                    pm.pointConstraint(
-                        source,
-                        target.get('joint'),
-                        maintainOffset=True
-                    )
-                elif target.get('constrain')[1] == "1":
-                    pm.orientConstraint(
-                        source,
-                        target.get('joint'),
-                        maintainOffset=True
-                    )
-                if target.get('constrain')[2] == "1":
-                    pm.scaleConstraint(
-                        source,
-                        target.get('joint'),
-                        maintainOffset=True
-                    )
+                self.clear_transforms(target)
+                
+                for s in sources:
+                    
+                    if not s['joint']:
+                        continue
+
+                    if type( s['joint'] ) != list:
+                        s['joint'] = [s['joint']]
+
+                    if s['constrain'][0] == "1":
+                        pm.pointConstraint(
+                            *s['joint'],
+                            target,
+                            maintainOffset=True
+                        )
+                    if s['constrain'][1] == "1":
+                        pm.orientConstraint(
+                            *s['joint'],
+                            target,
+                            maintainOffset=True
+                        )
+                    if s['constrain'][2] == "1":
+                        pm.scaleConstraint(
+                            *s['joint'],
+                            target,
+                            maintainOffset=True
+                        )
         pm.displayInfo("Done attaching the character to the rig")
         if warnings:
             pm.warning("Some joints failed to attach to the rig. "
