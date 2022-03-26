@@ -1,5 +1,6 @@
+"""Guide Hydraulic 01 module"""
+
 from functools import partial
-import pymel.core as pm
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt
@@ -12,15 +13,12 @@ from . import settingsUI as sui
 
 # guide info
 AUTHOR = "Jeremie Passerin, Miquel Campos"
-URL = "www.jeremiepasserin.com, www.miquel-campos.com"
+URL = "www.mcsGear.com"
 EMAIL = ""
 VERSION = [1, 0, 0]
-TYPE = "EPIC_foot_01"
-NAME = "foot"
-DESCRIPTION = (
-    "Game ready component for EPIC's UE and other Game Engines\n"
-    "Based on foot_bk_01"
-)
+TYPE = "EPIC_hydraulic_01"
+NAME = "hydraulic"
+DESCRIPTION = "Hydraulic component for mechanical rigging."
 
 ##########################################################
 # CLASS
@@ -39,50 +37,33 @@ class Guide(guide.ComponentGuide):
     email = EMAIL
     version = VERSION
 
-    connectors = [
-        "EPIC_leg_01",
-        "leg_2jnt_01",
-        "leg_ms_2jnt_01",
-        "leg_3jnt_01",
-    ]
-
-    joint_names_description = ["ball"]
+    joint_names_description = ["section_##"]
 
     def postInit(self):
         """Initialize the position for the guide"""
-        self.save_transform = ["root", "#_loc", "heel", "outpivot", "inpivot"]
-        self.addMinMax("#_loc", 1, -1)
+        self.save_transform = ["root", "tip"]
+        self.save_blade = ["blade"]
 
     def addObjects(self):
         """Add the Guide Root, blade and locators"""
 
         self.root = self.addRoot()
-        self.locs = self.addLocMulti("#_loc", self.root)
+        vTemp = transform.getOffsetPosition(self.root, [2, 0, 0])
+        self.loc = self.addLoc("tip", self.root, vTemp)
+        self.blade = self.addBlade("blade", self.root, self.loc)
 
-        centers = [self.root]
-        centers.extend(self.locs)
+        centers = [self.root, self.loc]
         self.dispcrv = self.addDispCurve("crv", centers)
-
-        # Heel and pivots
-        vTemp = transform.getOffsetPosition(self.root, [0, -1, -1])
-        self.heel = self.addLoc("heel", self.root, vTemp)
-        vTemp = transform.getOffsetPosition(self.root, [1, -1, -1])
-        self.outpivot = self.addLoc("outpivot", self.root, vTemp)
-        vTemp = transform.getOffsetPosition(self.root, [-1, -1, -1])
-        self.inpivot = self.addLoc("inpivot", self.root, vTemp)
-
-        cnt = [self.root, self.heel, self.outpivot, self.heel, self.inpivot]
-        self.dispcrv = self.addDispCurve("1", cnt)
 
     def addParameters(self):
         """Add the configurations settings"""
 
-        self.pRoll = self.addParam("useRollCtl", "bool", True)
+        self.pRefArray = self.addParam("ikrefarray", "string", "")
         self.pUseIndex = self.addParam("useIndex", "bool", False)
         self.pParentJointIndex = self.addParam(
-            "parentJointIndex", "long", -1, None, None
-        )
+            "parentJointIndex", "long", -1, None, None)
 
+        self.pDiv = self.addParam("div", "long", 2, 2, None)
 
 ##########################################################
 # Setting Page
@@ -136,24 +117,11 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.tabs.insertTab(1, self.settingsTab, "Component Settings")
 
         # populate component settings
-        self.populateCheck(self.settingsTab.useRollCtl_checkBox, "useRollCtl")
+        self.settingsTab.div_spinBox.setValue(self.root.attr("div").get())
 
-        # populate connections in main settings
-        for cnx in Guide.connectors:
-            self.mainSettingsTab.connector_comboBox.addItem(cnx)
-        cBox = self.mainSettingsTab.connector_comboBox
-        self.connector_items = [cBox.itemText(i) for i in range(cBox.count())]
-        currentConnector = self.root.attr("connector").get()
-        if currentConnector not in self.connector_items:
-            self.mainSettingsTab.connector_comboBox.addItem(currentConnector)
-            self.connector_items.append(currentConnector)
-            pm.displayWarning(
-                "The current connector: %s, is not a valid "
-                "connector for this component. "
-                "Build will Fail!!"
-            )
-        comboIndex = self.connector_items.index(currentConnector)
-        self.mainSettingsTab.connector_comboBox.setCurrentIndex(comboIndex)
+        refArrayItems = self.root.attr("ikrefarray").get().split(",")
+        for item in refArrayItems:
+            self.settingsTab.refArray_listWidget.addItem(item)
 
     def create_componentLayout(self):
 
@@ -165,20 +133,25 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
 
     def create_componentConnections(self):
 
-        self.settingsTab.useRollCtl_checkBox.stateChanged.connect(
-            partial(
-                self.updateCheck,
-                self.settingsTab.useRollCtl_checkBox,
-                "useRollCtl",
-            )
-        )
-        self.mainSettingsTab.connector_comboBox.currentIndexChanged.connect(
-            partial(
-                self.updateConnector,
-                self.mainSettingsTab.connector_comboBox,
-                self.connector_items,
-            )
-        )
+        self.settingsTab.div_spinBox.valueChanged.connect(
+            partial(self.updateSpinBox, self.settingsTab.div_spinBox, "div"))
+        self.settingsTab.refArrayAdd_pushButton.clicked.connect(
+            partial(self.addItem2listWidget,
+                    self.settingsTab.refArray_listWidget,
+                    "ikrefarray"))
+        self.settingsTab.refArrayRemove_pushButton.clicked.connect(
+            partial(self.removeSelectedFromListWidget,
+                    self.settingsTab.refArray_listWidget,
+                    "ikrefarray"))
+        self.settingsTab.refArray_listWidget.installEventFilter(self)
+
+    def eventFilter(self, sender, event):
+        if event.type() == QtCore.QEvent.ChildRemoved:
+            if sender == self.settingsTab.refArray_listWidget:
+                self.updateListAttr(sender, "ikrefarray")
+            return True
+        else:
+            return QtWidgets.QDialog.eventFilter(self, sender, event)
 
     def dockCloseEventTriggered(self):
         pyqt.deleteInstances(self, MayaQDockWidget)
