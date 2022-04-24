@@ -398,10 +398,7 @@ class Plebes():
                 if not pm.objExists(target):
                     warnings = True
                     pm.warning("Joint '{joint}' not found, so it won't be "
-                               "connected to the rig.".format(
-                                   joint=target.get('joint')
-                               )
-                               )
+                               "connected to the rig.".format(joint=target))  
                     continue
                 self.clear_transforms(target)
                 
