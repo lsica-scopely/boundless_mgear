@@ -18,8 +18,8 @@ AUTHOR = "Louis J. Sica"
 URL = ""
 EMAIL = "louis.sica@scopely.com"
 VERSION = [0, 1, 0]
-TYPE = "b_root_reference_pelvis"
-NAME = "root_reference_pelvis"
+TYPE = "b_root_reference_hips"
+NAME = "root_reference_hips"
 DESCRIPTION = ""
 
 ##########################################################
@@ -45,7 +45,7 @@ class Guide(guide.ComponentGuide):
     ##
     # @param self
     def postInit(self):
-        self.save_transform = ["root", "sizeRef"]
+        self.save_transform = ["root", "sizeRef", "hips"]
 
     # =====================================================
     # Add more object to the object definition list.
@@ -53,10 +53,16 @@ class Guide(guide.ComponentGuide):
     def addObjects(self):
 
         self.root = self.addRoot()
-        vTemp = transform.getOffsetPosition(self.root, [0, 0, 1])
-        self.sizeRef = self.addLoc("sizeRef", self.root, vTemp)
+
+        self.sizeRef = self.addLoc("sizeRef"
+                                    , self.root
+                                    , transform.getOffsetPosition(self.root, [0, 0, 1]) )
         pm.delete(self.sizeRef.getShapes())
         attribute.lockAttribute(self.sizeRef)
+
+        self.hips = self.addLoc("hips"
+                                    , self.root
+                                    , transform.getOffsetPosition(self.root, [0, 1, 0]) )
 
     # =====================================================
     # Add more parameter to the parameter definition list.

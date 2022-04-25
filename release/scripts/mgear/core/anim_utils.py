@@ -684,6 +684,7 @@ def changeSpace_with_namespace(
             ctl = getNode(c_name)
 
         sWM.append(ctl.getMatrix(worldSpace=True))
+
         controls.append(ctl)
 
     oAttr = node.attr(combo_attr)
@@ -1004,27 +1005,24 @@ def ikFkMatch_with_namespace(
 
         transform.matchWorldTransform(fk_targets[1], upv_ctrl)
         # calculates new pole vector position
-        start_end = fk_targets[-1].getTranslation(space="world") - fk_targets[
-            0
-        ].getTranslation(space="world")
-        start_mid = fk_targets[1].getTranslation(space="world") - fk_targets[
-            0
-        ].getTranslation(space="world")
+        start_end = (fk_targets[-1].getTranslation(space="world")
+                     - fk_targets[0].getTranslation(space="world"))
+
+        mid_index = int(len(fk_targets)/2)
+        start_mid = (fk_targets[mid_index].getTranslation(space="world")
+                     - fk_targets[0].getTranslation(space="world"))
 
         dot_p = start_mid * start_end
         proj = float(dot_p) / float(start_end.length())
         proj_vector = start_end.normal() * proj
         arrow_vector = start_mid - proj_vector
-        arrow_vector *= start_end.normal().length()
 
         # ensure that the pole vector distance is a minimun of 1 unit
-        while arrow_vector.length() < 1.0:
-            arrow_vector *= 2.0
+        if arrow_vector.length() < 1.0:
+            arrow_vector.normalize()
 
-        final_vector = arrow_vector + fk_targets[1].getTranslation(
-            space="world"
-        )
-        upv_ctrl.setTranslation(final_vector, space="world")
+        upv_ctrl.setTranslation( arrow_vector + fk_targets[mid_index].getTranslation(space="world")
+                                , space="world")
 
         # sets blend attribute new value
         o_attr.set(1.0)

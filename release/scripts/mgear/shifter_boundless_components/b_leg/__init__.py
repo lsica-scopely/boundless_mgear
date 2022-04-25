@@ -24,8 +24,8 @@ class Component(component.Main):
 
         g_apos = self.guide.apos
 
-        self.normal = self.getNormalFromPos(g_apos)
-        self.binormal = self.getBiNormalFromPos(g_apos)
+        forward = ( self.guide.apos[1] - self.guide.apos[0] ).normal()
+        self.normal =  forward.cross( datatypes.Vector( 0, 0, 1 )) # Left Vector
 
         self.length0 = vector.getDistance(g_apos[0],
                                           g_apos[1])
