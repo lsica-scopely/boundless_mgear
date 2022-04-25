@@ -1,20 +1,5 @@
 """Component Arm Miles 2 joints 01 module"""
 
-# ms 2jnt feature -----------------------
-# //done//FK isolation
-# //done//FK roll ctl
-# //done//Independent IK-FK hand ctl
-# //done//IK auto up vector(default off)
-# //done//T pose centric FK ctl
-# //done//elbow thickness + seperate upper/lower limb roundness ctl
-# //done//elbow scl and hand scl(ik/fk) add to jt scl
-# //done//addition limb jt layer ctl(optional)
-# To Do List -------------------------------
-
-# upper sleeve lower sleeve ctl(optional)
-# custom Upper limb 4 pt bezier o_node with input for rot interpolation
-
-
 import pymel.core as pm
 from pymel.core import datatypes
 
@@ -183,7 +168,6 @@ class Component(component.Main):
                                    tp=self.fk1_roll_ctl)
         attribute.setKeyableAttributes(self.fk2_ctl)
 
-        # self.fk_ctl = [self.fk0_roll_ctl, self.fk1_mtx, self.fk2_ctl]
         self.fk_ctl = [self.fk0_roll_ctl, self.fk1_roll_ctl, self.fk2_ctl]
 
         self.fk_ctls = [self.fk0_ctl,
