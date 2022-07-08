@@ -1,9 +1,7 @@
 """Boundless Game Skeleton module"""
-import enum
-from functools import partial
-from genericpath import exists
 import mgear
 import pymel.core as pm
+from maya import cmds
 
 from mgear.shifter.component import guide
 from mgear.core import transform, pyqt, attribute
@@ -17,7 +15,8 @@ from . import settingsUI as sui
 import boundless_dcclib.maya.util
 import boundless_dcclib.maya.skeleton
 
-from boundless_dcclib.serializeable import SerializeableEntity, SerializeableComponent
+from boundless_dcclib.transform import Vector, Rotation, Transform
+from boundless_dcclib.serializeable import SerialEntity, SerialComponent
 from boundless_dcclib.skeleton import Skeleton, Bone
 
 
@@ -181,8 +180,8 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         if not skeleton_template: return
 
         skeleton_template = eval(skeleton_template)
-        if skeleton_template.roots:
-            self.settingsTab.skeleton_label.setText(skeleton_template.roots[0].name)
+        if skeleton_template.bones:
+            self.settingsTab.skeleton_label.setText(skeleton_template.name)
 
 
     def addRow( self ):
@@ -244,35 +243,33 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
 
         skeleton_template = eval( skeleton_template )
 
-        constraint_map = SerializeableEntity()
+        constraint_map = SerialEntity()
 
         for i in range(0, self.map_table.rowCount()):
-            row_data = { 'joints':None, 'guides':None }
+            row_data = { 'joints':[None]*2
+                        , 'guides':[None]*2
+                        , 'guide_vector': None }
             for j in range(0, self.map_table.columnCount()):
                 
-                #FIXME: this is good enoough for proof of concept, but 
-                #       needs refactor, is a MESS
                 item = self.map_table.item(i,j)
                 if item:
                     if j < 2:
-                        components = skeleton_template.find_components(name=item.data(0)) \
-                                if item else None
+                        components = skeleton_template.find_components(name=item.data(0)) 
                         if components:
-                            if j == 0:
-                                row_data['joints'] = components[0]
-                            elif j == 1:
-                                if not row_data['joints']:
-                                    row_data['joints'] = components[0]                            
-                                #FIXME: Need to add as second parallel reference in 'joints' list, instead of nesting as a component 
-                                row_data['joints'].add_components( components[0] )
-                    elif j == 2:
-                        row_data['guides'] = boundless_dcclib.maya.skeleton.from_node( item.data(0) )
-                    elif j == 3:
-                        if not row_data['guides']:
-                            row_data['guides'] =  boundless_dcclib.maya.skeleton.from_node( item.data(0) )               
-                        row_data['guides'].add_components(  boundless_dcclib.maya.skeleton.from_node( item.data(0) ) )
-                        
-            constraint_map.add_components( SerializeableComponent(**row_data) )
+                            row_data['joints'][j] = components[0]
+                        else:
+                            #TODO: Handle this
+                            print (f"Couldnt find {item.data(0)}")
+                    else:
+                        row_data['guides'][j-2] = cmds.ls(item.data(0), long=True)[0]
+
+            if (row_data['guides'][0] and row_data['guides'][1]):
+                guide_matrix = [Transform(pm.xform( g, q=True, m=True, ws=True )) 
+                                    for g in row_data['guides']]
+
+            row_data['guide_vector'] = guide_matrix[1].translation - guide_matrix[0].translation
+
+            constraint_map.add_components( SerialComponent(**row_data) )
 
         self.root.attr("constraintMapping").set( constraint_map.dumps( ) )
 
@@ -280,21 +277,26 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         """Loads serialized map data back into the ui map table
         """
         constraint_map = self.root.attr("constraintMapping").get()
+        skeleton_template = self.root.attr("attachedSkeleton").get()
         
-        if not constraint_map:
+        if not skeleton_template or not constraint_map:
             return
 
         constraint_map = eval( constraint_map )
+        skeleton_template = eval(skeleton_template)
         
-        for i, child in  enumerate( constraint_map.components ):
-            self.map_table.insertRow(i)
 
-            if child['joints']:
-                self.map_table.setItem(i, 0, QtWidgets.QTableWidgetItem( child['joints'].name, 0 ))
-                if child['joints'].child_bones:
-                    self.map_table.setItem(i, 1, QtWidgets.QTableWidgetItem( child['joints'].child_bones[0].name, 0 ))
+        for i, row in enumerate( constraint_map.components ):
+            self.map_table.insertRow(i)
+            for j, uuid_ in enumerate(row['joints']):
+                child = skeleton_template.get_component(uuid_)
+
+                if not child:
+                    print (f"Couldn't find component {uuid_}")
+                    continue
+
+                self.map_table.setItem(i, j, QtWidgets.QTableWidgetItem( child.name, 0 ))
             
-            if child['guides']:
-                self.map_table.setItem(i, 2, QtWidgets.QTableWidgetItem( child['guides'].name, 0 ))
-                if child['guides'].child_bones:
-                    self.map_table.setItem(i, 3, QtWidgets.QTableWidgetItem( child['guides'].child_bones[0].name, 0 ))
+            for j, name in enumerate(row['guides']):
+                self.map_table.setItem(i, j+2, QtWidgets.QTableWidgetItem( cmds.ls(name)[0], 0 ))
+
