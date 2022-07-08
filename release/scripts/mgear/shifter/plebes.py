@@ -296,12 +296,14 @@ class Plebes():
             return False
         warnings = False
 
+        #TODO: This is a hack that causes more trouble that good, but should 
+        #       it be replaced?
         # Scale the guides
-        factor = 16.741  # Height of guide head
-        head_pos = self.get_target(
-            'neck_C0_head').getTranslation(space='world')
-        scale = head_pos.y / factor
-        pm.PyNode('guide').setScale(pm.datatypes.Vector(scale, scale, scale))
+        # factor = 16.741  # Height of guide head
+        # head_pos = self.get_target(
+        #     'neck_C0_head').getTranslation(space='world')
+        # scale = head_pos.y / factor
+        # pm.PyNode('guide').setScale(pm.datatypes.Vector(scale, scale, scale))
 
         # Match guides to joints based on template
         for pairs in self.template.get('guides'):
