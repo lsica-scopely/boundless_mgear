@@ -1,4 +1,5 @@
 import pymel.core as pm
+from mgear.core import attribute
 
 
 class customShifterMainStep(object):
@@ -79,6 +80,8 @@ class customShifterMainStep(object):
             PyNode: The new duplicated object.
         """
         dup = pm.duplicate(source)[0]
+        dup.visibility.set(True)
+        attribute.unlockAttribute(dup)
         if name:
             pm.rename(dup, name)
         else:

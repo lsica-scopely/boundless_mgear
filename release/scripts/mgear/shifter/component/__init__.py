@@ -66,6 +66,10 @@ class Main(object):
         self.side = self.settings["comp_side"]
         self.index = self.settings["comp_index"]
 
+        # Init relative ref mapping for custom IK spaces
+        self.relatives_map_upv = {}
+        self.relatives_map = {}
+
         # --------------------------------------------------
         # Shortcut to useful settings
         self.size = self.guide.size
@@ -236,9 +240,7 @@ class Main(object):
 
         # joint --------------------------------
         if self.options["joint_rig"]:
-            self.component_jnt_org = primitive.addTransform(
-                self.rig.jnt_org, self.getName("jnt_org")
-            )
+            self.component_jnt_org = self.rig.jnt_org
             # The initial assigment of the active jnt and the parent relative
             # jnt is the same, later will be updated base in the user options
             self.active_jnt = self.component_jnt_org
@@ -266,6 +268,8 @@ class Main(object):
         rot_off=None,
         vanilla_nodes=False,
         leaf_joint=False,
+        guide_relative=None,
+        data_contracts=None,
     ):
         """Add joint as child of the active joint or under driver object.
 
@@ -288,6 +292,8 @@ class Main(object):
             vanilla_nodes (bool, optional): Description
             leaf_joint (bool, optional): If true will create a child joint as
                 a leaf joint to  imput the scale. This option is meant for games
+            guide_relative (str, optional): Guide locator name that define joint
+                position
 
         No Longer Returned:
             dagNode: The newly created joint.
@@ -313,6 +319,8 @@ class Main(object):
                 segComp=segComp,
                 rot_off=rot_off,
                 leaf_joint=leaf_joint,
+                guide_relative=guide_relative,
+                data_contracts=data_contracts,
             )
 
     def _addJoint(
@@ -324,6 +332,8 @@ class Main(object):
         segComp=False,
         rot_off=None,
         leaf_joint=False,
+        guide_relative=None,
+        data_contracts=None,
     ):
         """Add joint as child of the active joint or under driver object.
 
@@ -341,8 +351,13 @@ class Main(object):
             segComp (bool): Set True or False the segment compensation in the
                 joint..
             rot_off (list, optional): offset in degrees for XYZ rotation
+            leaf_joint (bool, optional): If true will create a child joint as
+                a leaf joint to  imput the scale. This option is meant for games
+            guide_relative (str, optional): Guide locator name tha define joint
+                position
 
-        Returns:
+
+        Deleted Parameters:
             dagNode: The newly created joint.
 
         """
@@ -454,7 +469,7 @@ class Main(object):
                         )
                         leaf_jnt.attr("radius").set(1.5)
                         leaf_jnt.attr("overrideEnabled").set(1)
-                        leaf_jnt.attr("overrideColor").set(18)
+                        leaf_jnt.attr("overrideColor").set(13)
                         leaf_jnt.rotate.set([0, 0, 0])
                         # connect scale
                         pm.connectAttr(cns_m.scale, leaf_jnt.scale)
@@ -499,6 +514,16 @@ class Main(object):
             attribute.lockAttribute(jnt)
 
         self.addToGroup(jnt, "deformers")
+
+        if guide_relative:
+            if not jnt.hasAttr("guide_relative"):
+                attribute.addAttribute(jnt, "guide_relative", "string")
+            jnt.guide_relative.set(guide_relative)
+
+        if data_contracts:
+            if not jnt.hasAttr("data_contracts"):
+                attribute.addAttribute(jnt, "data_contracts", "string")
+            jnt.data_contracts.set(data_contracts)
 
         return jnt
 
@@ -732,6 +757,7 @@ class Main(object):
         lp=True,
         mirrorConf=[0, 0, 0, 0, 0, 0, 0, 0, 0],
         guide_loc_ref=None,
+        add_2_grp=True,
         **kwargs
     ):
         """
@@ -858,17 +884,17 @@ class Main(object):
 
         # create the attributes to handlde mirror and symetrical pose
         attribute.add_mirror_config_channels(ctl, mirrorConf)
+        if add_2_grp:
+            if self.settings["ctlGrp"]:
+                ctlGrp = self.settings["ctlGrp"]
+                self.addToGroup(ctl, ctlGrp, "controllers")
+            else:
+                ctlGrp = "controllers"
+                self.addToGroup(ctl, ctlGrp)
 
-        if self.settings["ctlGrp"]:
-            ctlGrp = self.settings["ctlGrp"]
-            self.addToGroup(ctl, ctlGrp, "controllers")
-        else:
-            ctlGrp = "controllers"
-            self.addToGroup(ctl, ctlGrp)
-
-        # lock the control parent attributes if is not a control
-        if parent not in self.groups[ctlGrp] and lp:
-            self.transform2Lock.append(parent)
+            # lock the control parent attributes if is not a control
+            if parent not in self.groups[ctlGrp] and lp:
+                self.transform2Lock.append(parent)
 
         # Set the control shapes isHistoricallyInteresting
         for oShape in ctl.getShapes():
@@ -1562,15 +1588,29 @@ class Main(object):
                 for i, attr in enumerate(cns_attr):
                     pm.setAttr(attr, 1.0)
 
-    def connectRef(self, refArray, cns_obj, upVAttr=None, init_refNames=False):
+    def connectRef(
+        self,
+        refArray,
+        cns_obj,
+        upVAttr=None,
+        init_refNames=False,
+        st=None,
+    ):
         """Connect the cns_obj to a multiple object using parentConstraint.
 
         Args:
             refArray (list of dagNode): List of driver objects
             cns_obj (dagNode): The driven object.
             upVAttr (bool): Set if the ref Array is for IK or Up vector
+            init_refNames (bool, optional): Nice name for the references menu
+            st (None, optional): skipTranslate
         """
         if refArray:
+            if upVAttr:
+                relatives_map = self.relatives_map_upv
+            else:
+                relatives_map = self.relatives_map
+
             if upVAttr and not init_refNames:
                 # we only can perform name validation if the init_refnames are
                 # provided in a separated list. This check ensures backwards
@@ -1583,15 +1623,46 @@ class Main(object):
                 # return if the not ref_names list
                 return
             elif len(ref_names) == 1:
-                ref = self.rig.findRelative(ref_names[0])
+                ref = self.rig.findRelative(ref_names[0], relatives_map)
                 pm.parent(cns_obj, ref)
             else:
                 ref = []
                 for ref_name in ref_names:
-                    ref.append(self.rig.findRelative(ref_name))
+                    # handle special case for full mirror behavior negating
+                    # scaleY axis to -1
+                    # this is needed because parent constraining  doesn't handle
+                    # scaling and the maintain offset will not work properly
+                    if cns_obj.sy.get() < 0:
+                        original_trans = self.rig.findRelative(
+                            ref_name, relatives_map
+                        )
+                        ref_trans_name = (
+                            cns_obj.getName()
+                            + "_"
+                            + original_trans.getName()
+                            + "_space_ref"
+                        )
 
+                        # check if already exist
+                        if pm.ls(ref_trans_name):
+                            ref_trans = pm.ls(ref_trans_name)[0]
+                        else:
+                            ref_trans = primitive.addTransform(
+                                original_trans,
+                                ref_trans_name,
+                            )
+                            transform.matchWorldTransform(cns_obj, ref_trans)
+                        ref.append(ref_trans)
+                    else:
+                        ref.append(
+                            self.rig.findRelative(ref_name, relatives_map)
+                        )
                 ref.append(cns_obj)
-                cns_node = pm.parentConstraint(*ref, maintainOffset=True)
+                if not st:
+                    st = "none"
+                cns_node = pm.parentConstraint(
+                    *ref, maintainOffset=True, st=st
+                )
                 cns_attr = pm.parentConstraint(
                     cns_node, query=True, weightAliasList=True
                 )
@@ -1614,6 +1685,7 @@ class Main(object):
                         pm.setAttr(node_name + ".colorIfTrueR", 1)
                         pm.setAttr(node_name + ".colorIfFalseR", 0)
                         pm.connectAttr(node_name + ".outColorR", attr)
+                return ref
 
     def connectRef2(
         self,
@@ -1679,6 +1751,8 @@ class Main(object):
                     pm.setAttr(node_name + ".colorIfTrueR", 1)
                     pm.setAttr(node_name + ".colorIfFalseR", 0)
                     pm.connectAttr(node_name + ".outColorR", attr)
+
+                return ref
 
     def connect_standardWithRotRef(self, refArray, cns_obj):
         """Connect the cns_obj to a multiple object
@@ -1904,6 +1978,7 @@ class Main(object):
         self.build_data["Controls"] = []
         self.build_data["Ik"] = []
         self.build_data["Twist"] = []
+        self.build_data["Squash"] = []
 
         # joints
         for j in self.jointList:
@@ -1911,11 +1986,27 @@ class Main(object):
             jnt_dict["Name"] = j.name()
             jnt_dict.update(self.gather_transform_info(j))
             self.build_data["Joints"].append(jnt_dict)
+            if j.hasAttr("data_contracts"):
+                for dc in j.data_contracts.get().split(","):
+                    # check if the Data contract indentifier type is a valid
+                    # data contract
+                    if dc not in self.build_data.keys():
+                        pm.displayWarning(
+                            "{} is not a valid Data Contract Key".format(dc)
+                        )
+                        continue
+                    # populate component active data contracts list
+                    if dc not in self.build_data["DataContracts"]:
+                        self.build_data["DataContracts"].append(dc)
+                    # add joint Name to the corresponding data contract list
+                    self.build_data[dc].append(j.name())
+
         # controls
         for c in self.controlers:
             ctl_dict = {}
             ctl_dict["Name"] = c.name()
             ctl_dict["Role"] = c.ctl_role.get()
+            ctl_dict["Shape"] = curve.collect_curve_data(c)
             ctl_dict.update(self.gather_transform_info(c))
             self.build_data["Controls"].append(ctl_dict)
 

@@ -1,5 +1,5 @@
 """Component Control 01 module"""
-
+import ast
 from mgear.shifter import component
 
 from mgear.core import attribute, transform, primitive
@@ -30,44 +30,68 @@ class Component(component.Main):
             t = transform.setMatrixScale(t, scl)
 
         self.ik_cns = primitive.addTransform(
-            self.root, self.getName("ik_cns"), t)
-
-        self.ctl = self.addCtl(self.ik_cns,
-                               "ctl",
-                               t,
-                               self.color_ik,
-                               self.settings["icon"],
-                               w=self.settings["ctlSize"] * self.size,
-                               h=self.settings["ctlSize"] * self.size,
-                               d=self.settings["ctlSize"] * self.size,
-                               tp=self.parentCtlTag)
+            self.root, self.getName("ik_cns"), t
+        )
+        ctl_name = ast.literal_eval(
+            self.settings["ctlNamesDescription_custom"]
+        )[0]
+        self.ctl = self.addCtl(
+            self.ik_cns,
+            ctl_name,
+            t,
+            self.color_ik,
+            self.settings["icon"],
+            w=self.settings["ctlSize"] * self.size,
+            h=self.settings["ctlSize"] * self.size,
+            d=self.settings["ctlSize"] * self.size,
+            tp=self.parentCtlTag,
+        )
 
         # we need to set the rotation order before lock any rotation axis
         if self.settings["k_ro"]:
             rotOderList = ["XYZ", "YZX", "ZXY", "XZY", "YXZ", "ZYX"]
             attribute.setRotOrder(
-                self.ctl, rotOderList[self.settings["default_rotorder"]])
+                self.ctl, rotOderList[self.settings["default_rotorder"]]
+            )
 
-        params = [s for s in
-                  ["tx", "ty", "tz", "ro", "rx", "ry", "rz", "sx", "sy", "sz"]
-                  if self.settings["k_" + s]]
+        params = [
+            s
+            for s in [
+                "tx",
+                "ty",
+                "tz",
+                "ro",
+                "rx",
+                "ry",
+                "rz",
+                "sx",
+                "sy",
+                "sz",
+            ]
+            if self.settings["k_" + s]
+        ]
         attribute.setKeyableAttributes(self.ctl, params)
 
         if self.settings["joint"]:
             self.jnt_pos.append(
-                [self.ctl, self.name, None, self.settings["uniScale"]])
+                {
+                    "obj": self.ctl,
+                    "name": self.name,
+                    "guide_relative": self.guide.guide_locators[0],
+                    "UniScale": self.settings["uniScale"],
+                }
+            )
 
     def addAttributes(self):
         # Ref
         if self.settings["ikrefarray"]:
             ref_names = self.get_valid_alias_list(
-                self.settings["ikrefarray"].split(","))
+                self.settings["ikrefarray"].split(",")
+            )
             if len(ref_names) > 1:
                 self.ikref_att = self.addAnimEnumParam(
-                    "ikref",
-                    "Ik Ref",
-                    0,
-                    ref_names)
+                    "ikref", "Ik Ref", 0, ref_names
+                )
 
     def addOperators(self):
         return

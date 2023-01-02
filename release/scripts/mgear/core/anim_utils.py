@@ -172,7 +172,7 @@ def getClosestNode(node, nodesToQuery):
     for index, nodeTQ in enumerate(nodesToQuery):
         nodeTQ = pm.PyNode(nodeTQ)
         tmpDist = vector.getDistance2(node, nodeTQ)
-        if index is 0:
+        if index == 0:
             distance = tmpDist
             closestNode = nodeTQ
         if distance > tmpDist:
@@ -212,15 +212,15 @@ def getRootNode():
     if not current:
         raise RuntimeError("You need to select at least one rig node")
 
-    if pm.objExists("{}.is_rig".format(current[0])):
+    if current[0].hasAttr("is_rig"):
         root = current[0]
     else:
         holder = current[0]
-        while pm.listRelatives(holder, parent=True) and not root:
-            if pm.objExists("{}.is_rig".format(holder)):
-                root = holder
+        while holder.getParent() and not root:
+            if holder.getParent().hasAttr("is_rig"):
+                root = holder.getParent()
             else:
-                holder = pm.listRelatives(holder, parent=True)[0]
+                holder = holder.getParent()
 
     if not root:
         raise RuntimeError("Couldn't find root node from your selection")
@@ -329,6 +329,8 @@ def get_ik_fk_controls_by_role(uiHost, attr_ctl_cnx):
                     ik_controls["ik_control"] = c.stripNamespace()
                 elif role == "ikRot":
                     ik_controls["ik_rot"] = c.stripNamespace()
+                elif role == "roll":
+                    ik_controls["roll"] = c.stripNamespace()
 
     fk_controls = sorted(fk_controls)
     return ik_controls, fk_controls
@@ -877,7 +879,15 @@ def getComboKeys(model, object_name, combo_attr):
 
 
 def ikFkMatch_with_namespace(
-    namespace, ikfk_attr, ui_host, fks, ik, upv, ik_rot=None, key=None
+    namespace,
+    ikfk_attr,
+    ui_host,
+    fks,
+    ik,
+    upv,
+    ik_rot=None,
+    key=None,
+    ik_controls=None,
 ):
     """Switch IK/FK with matching functionality
 
@@ -1026,8 +1036,20 @@ def ikFkMatch_with_namespace(
 
         # sets blend attribute new value
         o_attr.set(1.0)
-        roll_att = ui_node.attr(ikfk_attr.replace("blend", "roll"))
+
+        # handle the upvector roll
+        roll_att_name = ikfk_attr.replace("blend", "roll")
+        try:
+            roll_att = ui_node.attr(roll_att_name)
+        except pm.MayaAttributeError:
+            # if is not in the uiHost lets check the IK ctl
+            roll_att = ik_ctrl.attr(roll_att_name)
         roll_att.set(0.0)
+
+        # reset roll ctl if exist
+        if ik_controls and "roll" in ik_controls.keys():
+            roll_ctl = _get_node(ik_controls["roll"])
+            roll_ctl.rotateX.set(0)
 
         # reset IK foot ctls
         if foot_cnx:
@@ -1827,10 +1849,16 @@ class IkFkTransfer(AbstractAnimationTransfer):
 
     def getChangeRollAttrName(self):
         # type: () -> str
-        return "{}.{}".format(
+        at_name = self.switchedAttrShortName.replace("blend", "roll")
+        at = "{}.{}".format(
             self.getHostName(),
             self.switchedAttrShortName.replace("blend", "roll"),
+            at_name
         )
+        if pm.objExists(at):
+            return at
+        else:
+            return self.ikCtrl[0].attr(at_name)
 
     def changeAttrToBoundValue(self):
         # type: () -> None

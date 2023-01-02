@@ -14,7 +14,7 @@ from . import settingsUI as sui
 AUTHOR = "anima inc."
 URL = "www.studioanima.co.jp"
 EMAIL = ""
-VERSION = [1, 0, 0]
+VERSION = [1, 1, 0]
 TYPE = "chain_IK_spline_variable_FK_01"
 NAME = "chain"
 DESCRIPTION = "IK chain with a spline driven joints. And variable number of \
@@ -67,6 +67,10 @@ class Guide(guide.ComponentGuide):
         self.pMaxStretch = self.addParam("maxstretch", "double", 1, 1)
         self.pMaxSquash = self.addParam("maxsquash", "double", 1, 0, 1)
         self.pSoftness = self.addParam("softness", "double", 0, 0, 1)
+
+        self.pIKSolver = self.addEnumParam(
+            "ctlOrientation", ["xz", "yz", "zx"], 0
+        )
 
         self.pUseIndex = self.addParam("useIndex", "bool", False)
         self.pParentJointIndex = self.addParam(
@@ -140,6 +144,10 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
         self.settingsTab.maxSquash_spinBox.setValue(
             self.root.attr("maxsquash").get())
 
+        self.settingsTab.ctlOri_comboBox.setCurrentIndex(
+            self.root.attr("ctlOrientation").get()
+        )
+
     def create_componentLayout(self):
 
         self.settings_layout = QtWidgets.QVBoxLayout()
@@ -182,6 +190,14 @@ class componentSettings(MayaQWidgetDockableMixin, guide.componentMainSettings):
             partial(self.updateSpinBox,
                     self.settingsTab.maxSquash_spinBox,
                     "maxsquash"))
+
+        self.settingsTab.ctlOri_comboBox.currentIndexChanged.connect(
+            partial(
+                self.updateComboBox,
+                self.settingsTab.ctlOri_comboBox,
+                "ctlOrientation",
+            )
+        )
 
     def dockCloseEventTriggered(self):
         pyqt.deleteInstances(self, MayaQDockWidget)

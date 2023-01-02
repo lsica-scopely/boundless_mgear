@@ -297,9 +297,14 @@ class Component(component.Main):
         )
 
         # tws_ref
-        t = transform.getRotationFromAxis(
-            datatypes.Vector(0, -1, 0), self.normal, "xz", self.negate
-        )
+        if self.up_axis == "y":
+            t = transform.getRotationFromAxis(
+                datatypes.Vector(0, -1, 0), self.normal, "xz", self.negate
+            )
+        else:
+            t = transform.getRotationFromAxis(
+                datatypes.Vector(0, 0, -1), self.normal, "xz", self.negate
+            )
         t = transform.setMatrixPosition(t, self.guide.pos["ankle"])
 
         # addind an npo parent transform to fix flip in Maya 2018.2
@@ -447,24 +452,42 @@ class Component(component.Main):
 
             # setting the joints
             if i == 0:
-                self.jnt_pos.append([driver, jdn_thigh])
+                self.jnt_pos.append(
+                    {
+                        "obj": driver,
+                        "name": jdn_thigh,
+                        "guide_relative": self.guide.guide_locators[0],
+                        "data_contracts": "Ik",
+                    }
+                )
                 current_parent = "root"
                 twist_name = jdn_thigh_twist
                 twist_idx = 1
                 increment = 1
             elif i == self.settings["div0"] + 1:
-                self.jnt_pos.append([driver, jdn_calf, current_parent])
+                self.jnt_pos.append(
+                    {
+                        "obj": driver,
+                        "name": jdn_calf,
+                        "newActiveJnt": current_parent,
+                        "guide_relative": self.guide.guide_locators[1],
+                        "data_contracts": "Ik",
+                    }
+                )
                 twist_name = jdn_calf_twist
                 current_parent = "knee"
                 twist_idx = self.settings["div1"]
                 increment = -1
             else:
                 self.jnt_pos.append(
-                    [
-                        driver,
-                        string.replaceSharpWithPadding(twist_name, twist_idx),
-                        current_parent,
-                    ]
+                    {
+                        "obj": driver,
+                        "name": string.replaceSharpWithPadding(
+                            twist_name, twist_idx
+                        ),
+                        "newActiveJnt": current_parent,
+                        "data_contracts": "Twist,Squash",
+                    }
                 )
                 twist_idx += increment
 
@@ -479,7 +502,15 @@ class Component(component.Main):
         )
         if self.up_axis == "z":
             self.end_jnt_off.rz.set(-90)
-        self.jnt_pos.append([self.end_jnt_off, jdn_foot, current_parent])
+        self.jnt_pos.append(
+            {
+                "obj": self.end_jnt_off,
+                "name": jdn_foot,
+                "newActiveJnt": current_parent,
+                "guide_relative": self.guide.guide_locators[2],
+                "data_contracts": "Ik",
+            }
+        )
 
         # match IK FK references
         self.match_fk0_off = self.add_match_ref(
@@ -570,7 +601,7 @@ class Component(component.Main):
         ref_names = ["Auto", "ikFoot"]
         if self.settings["upvrefarray"]:
             ref_names = ref_names + self.get_valid_alias_list(
-                self.settings["ikrefarray"].split(",")
+                self.settings["upvrefarray"].split(",")
             )
         self.upvref_att = self.addAnimEnumParam(
             "upvref", "UpV Ref", 0, ref_names
@@ -667,9 +698,10 @@ class Component(component.Main):
             "ikSCsolver",
         )
         pm.pointConstraint(self.ik_ctl, self.ikHandleUpvRef)
-        pm.parentConstraint(
-            self.legChainUpvRef[0], self.ik_ctl, self.upv_cns, mo=True
-        )
+        self.relatives_map_upv = {
+            "Auto": self.legChainUpvRef[0],
+            "Foot": self.ik_ctl,
+        }
 
         # Visibilities -------------------------------------
         # shape.dispGeometry
@@ -748,10 +780,10 @@ class Component(component.Main):
 
         applyop.oriCns(ori_ref, self.tws0_loc, maintainOffset=True)
 
-        self.tws0_loc.setAttr("sx", 0.001)
-        self.tws2_loc.setAttr("sx", 0.001)
+        self.tws0_loc.setAttr("sx", 0.000001)
+        self.tws2_loc.setAttr("sx", 0.000001)
 
-        add_node = node.createAddNode(self.roundness_att, 0.0)
+        add_node = node.createAddNode(self.roundness_att, 0.000001)
         pm.connectAttr(add_node + ".output", self.tws1_rot.attr("sx"))
 
         # Volume -------------------------------------------
@@ -866,12 +898,3 @@ class Component(component.Main):
                 [self.ctrn_loc],
                 False,
             )
-
-    def collect_build_data(self):
-        component.Main.collect_build_data(self)
-        self.build_data["DataContracts"] = ["Ik"]
-        self.build_data["Ik"] = [
-            self.jointList[0].name(),
-            self.jointList[self.settings["div0"] + 1].name(),
-            self.jointList[-1].name(),
-        ]

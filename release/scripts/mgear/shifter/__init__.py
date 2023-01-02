@@ -43,30 +43,53 @@ SHIFTER_COMPONENT_ENV_KEY = "MGEAR_SHIFTER_COMPONENT_PATH"
 
 
 def log_window():
-    log_window_name = "mgear_shifter_build_log_window"
-    log_window_field_reporter = "mgear_shifter_log_field_reporter"
-    if not pm.window(log_window_name, exists=True):
-        logWin = pm.window(
-            log_window_name, title="Shifter Build Log", iconName="Shifter Log"
-        )
-        pm.columnLayout(adjustableColumn=True)
-        pm.cmdScrollFieldReporter(
-            log_window_field_reporter, width=800, height=500, clr=True
-        )
-        pm.button(
-            label="Close",
-            command=(
-                'import pymel.core as pm\npm.deleteUI("'
-                + logWin
-                + '", window=True)'
-            ),
-        )
-        pm.setParent("..")
-        pm.showWindow(logWin)
-    else:
-        pm.cmdScrollFieldReporter(log_window_field_reporter, e=True, clr=True)
-        pm.showWindow(log_window_name)
-    mgear.logInfos()
+    if mgear.logMode and mgear.use_log_window:
+        log_window_name = "mgear_shifter_build_log_window"
+        log_window_field_reporter = "mgear_shifter_log_field_reporter"
+        if not pm.window(log_window_name, exists=True):
+            log_win = pm.window(
+                log_window_name,
+                title="Shifter Build Log",
+                iconName="Shifter Log",
+                width=800,
+                height=500,
+            )
+            form = pm.formLayout()
+            reporter = pm.cmdScrollFieldReporter(
+                log_window_field_reporter, width=400, height=200, clr=True
+            )
+
+            btn_close = pm.button(
+                label="Close",
+                command=lambda *args: pm.deleteUI(log_win, window=True),
+            )
+
+            margin_v = 5
+            margin_h = 5
+            pm.formLayout(
+                form,
+                e=True,
+                attachForm=[
+                    (reporter, "top", margin_v),
+                    (reporter, "right", margin_h),
+                    (reporter, "left", margin_h),
+                    (btn_close, "bottom", margin_v),
+                    (btn_close, "right", margin_h),
+                    (btn_close, "left", margin_h),
+                ],
+                attachControl=[
+                    (reporter, "bottom", margin_v, btn_close),
+                ],
+            )
+
+            pm.setParent("..")
+            pm.showWindow(log_win)
+        else:
+            pm.cmdScrollFieldReporter(
+                log_window_field_reporter, e=True, clr=True
+            )
+            pm.showWindow(log_window_name)
+        mgear.logInfos()
 
 
 def getComponentDirectories():
@@ -206,11 +229,14 @@ class Rig(object):
         self.stopBuild = False
         selection = pm.ls(selection=True)
         if not selection:
-            mgear.log(
-                "Select one or more guide root or a guide model",
-                mgear.sev_error,
-            )
-            return
+            selection = pm.ls("guide")
+            if not selection:
+                mgear.log(
+                    "Not guide found or selected.\n"
+                    + "Select one or more guide root or a guide model",
+                    mgear.sev_error,
+                )
+                return
 
         # check if is partial build or full guide build
         ismodel = False
@@ -506,9 +532,11 @@ class Rig(object):
         # clean jnt_org --------------------------------------
         if self.options["joint_rig"]:
             mgear.log("Cleaning jnt org")
-            for jOrg in dag.findChildrenPartial(self.jnt_org, "org"):
-                if not jOrg.listRelatives(c=True):
-                    pm.delete(jOrg)
+            jnt_org_child = dag.findChildrenPartial(self.jnt_org, "org")
+            if jnt_org_child:
+                for jOrg in jnt_org_child:
+                    if not jOrg.listRelatives(c=True):
+                        pm.delete(jOrg)
 
         # Groups ------------------------------------------
         mgear.log("Creating groups")
@@ -540,6 +568,13 @@ class Rig(object):
                 if sub in masterSet.members():
                     masterSet.remove(sub)
                 pg.add(sub)
+
+        # create geo group
+
+        geoSet = pm.sets(n=self.model.name() + "_geo_grp", em=True)
+        pm.connectAttr(geoSet.message, self.model.rigGroups[groupIdx])
+        masterSet.add(geoSet)
+        groupIdx += 1
 
         # Bind pose ---------------------------------------
         # controls_grp = self.groups["controllers"]
@@ -575,10 +610,11 @@ class Rig(object):
         for c, comp in self.customStepDic["mgearRun"].components.items():
             self.build_data["Components"].append(comp.build_data)
 
+        if self.options["data_collector_embedded"]:
+            root_jnt = self.get_root_jnt_embbeded()
+            self.add_collected_data_to_root_jnt(root_jnt=root_jnt)
         if self.options["data_collector"]:
-            self.add_collected_data_to_root_jnt()
-            if self.options["data_collector_path"]:
-                self.data_collector_output(self.options["data_collector_path"])
+            self.data_collector_output(self.options["data_collector_path"])
 
         return self.build_data
 
@@ -599,22 +635,38 @@ class Rig(object):
         f.close()
         file_path = None
 
-    def add_collected_data_to_root_jnt(self):
+    def add_collected_data_to_root_jnt(self, root_jnt=None):
         """Add collected data to root joint
         Root joint is the first joint generated in the rig.
         """
-        root_jnt = None
-        for c in self.componentsIndex:
-            comp = self.customStepDic["mgearRun"].components[c]
-            if not root_jnt and comp.jointList:
-                root_jnt = comp.jointList[0]
-                attribute.addAttribute(
-                    root_jnt,
-                    "collected_data",
-                    "string",
-                    str(json.dumps(self.build_data)),
+        if not root_jnt:
+            for c in self.componentsIndex:
+                comp = self.customStepDic["mgearRun"].components[c]
+                if not root_jnt and comp.jointList:
+                    root_jnt = comp.jointList[0]
+                    break
+        if root_jnt:
+            attribute.addAttribute(
+                root_jnt,
+                "collected_data",
+                "string",
+                str(json.dumps(self.build_data)),
+            )
+
+    def get_root_jnt_embbeded(self):
+        """Get the root joint to embbed the data
+
+        Returns:
+            pyNode: Joint
+        """
+        j_name = self.options["data_collector_embedded_custom_joint"]
+        if j_name:
+            try:
+                return pm.PyNode(j_name)
+            except pm.MayaNodeError:
+                pm.displayError(
+                    "{} doesn't exist or is not unique".format(j_name)
                 )
-                break
 
     def addCtl(self, parent, name, m, color, iconShape, **kwargs):
         """Create the control and apply the shape, if this is alrealdy stored
@@ -777,18 +829,24 @@ class Rig(object):
         if names:
             return names[1]
 
-    def findRelative(self, guideName):
+    def findRelative(self, guideName, relatives_map={}):
         """Return the objects in the rig matching the guide object.
 
         Args:
             guideName (str): Name of the guide object.
+            relatives_map (dict, optional): Custom relative mapping to
+                    point any object in a component. For example used to point
+                    Auto in upvector reference.
 
         Returns:
-           transform: The relative object
+            transform: The relative object
 
         """
         if guideName is None:
             return self.global_ctl
+
+        if guideName in relatives_map.keys():
+            return relatives_map[guideName]
 
         comp_name = self.getComponentName(guideName)
         relative_name = self.getRelativeName(guideName)

@@ -41,12 +41,40 @@ class Component(component.Main):
         self.ik_ctl = []
         # tOld = False
         self.previusTag = self.parentCtlTag
+        axis_ori = ["xz", "yz", "zx"][self.settings["ctlOrientation"]]
         for i, t in enumerate(transform.getChainTransform2(self.guide.apos,
                                                            self.normal,
-                                                           self.negate)):
+                                                           self.negate,
+                                                           axis=axis_ori)):
 
             ik_npo = primitive.addTransform(
                 self.root, self.getName("ik%s_npo" % i), t)
+
+            # check orientation to define w, h and d + the offser
+            w_size = self.size * 0.1
+            h_size = self.size * 0.1
+            d_size = self.size * 0.1
+            # check first axis
+            if axis_ori[0] == "-":
+                first_axis = axis_ori[1]
+            else:
+                first_axis = axis_ori[0]
+            # set ro offset
+            if first_axis == "x":
+                ro_vec = datatypes.Vector([0, 0, 1.5708])
+                self.front_axis = 0
+                self.up_axis = 2
+                self.ref_twist_vec = datatypes.Vector(1.0, 0, 0)
+            elif first_axis == "y":
+                ro_vec = datatypes.Vector([0, 0, 0])
+                self.front_axis = 1
+                self.up_axis = 0
+                self.ref_twist_vec = datatypes.Vector(0, 0, -1.0)
+            elif first_axis == "z":
+                ro_vec = datatypes.Vector([1.5708, 0, 0])
+                self.front_axis = 2
+                self.up_axis = 0
+                self.ref_twist_vec = datatypes.Vector(1.0, 0, 0)
 
             ik_ctl = self.addCtl(
                 ik_npo,
@@ -57,7 +85,7 @@ class Component(component.Main):
                 w=self.size * .15,
                 h=self.size * .15,
                 d=self.size * .15,
-                ro=datatypes.Vector([0, 0, 1.5708]),
+                ro=ro_vec,
                 tp=self.previusTag,
                 mirrorConf=self.mirror_conf)
 
@@ -169,7 +197,7 @@ class Component(component.Main):
                 parent_twistRef, self.getName("%s_pos_ref" % i), t)
 
             ref_twist.setTranslation(
-                datatypes.Vector(1.0, 0, 0), space="preTransform")
+                self.ref_twist_vec, space="preTransform")
 
             self.twister.append(twister)
             self.ref_twist.append(ref_twist)
@@ -231,12 +259,14 @@ class Component(component.Main):
             u = i / (self.settings["fkNb"] - 1.0)
             if i == 0:  # we add extra 10% to the first position
                 u = (1.0 / (self.settings["fkNb"] - 1.0)) / 10
+            if u == 1.0:
+                u = 0.99
 
             cns = applyop.pathCns(
                 self.div_cns[i], self.slv_crv, False, u, True)
 
-            cns.setAttr("frontAxis", 0)  # front axis is 'X'
-            cns.setAttr("upAxis", 2)  # front axis is 'Z'
+            cns.setAttr("frontAxis", self.front_axis)  # front axis
+            cns.setAttr("upAxis", self.up_axis)  # front axis
 
             # Roll
             intMatrix = applyop.gear_intmatrix_op(
@@ -321,7 +351,7 @@ class Component(component.Main):
 
     def setRelation(self):
         """Set the relation beetween object from guide to rig"""
-        every_each = len(self.fk_ctl) / (len(self.ik_ctl) - 1)
+        every_each = int(len(self.fk_ctl) / (len(self.ik_ctl) - 1))
 
         self.relatives["root"] = self.fk_ctl[0]
         self.controlRelatives["root"] = self.fk_ctl[0]

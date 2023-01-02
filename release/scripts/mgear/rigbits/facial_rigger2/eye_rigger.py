@@ -355,6 +355,7 @@ def rig(
         pm.sets(ctlSet, add=arrow_ctl)
     attribute.setKeyableAttributes(arrow_ctl, params=["rx", "ry", "rz"])
     attribute.addAttribute(arrow_ctl, "isCtl", "bool", keyable=False)
+    attribute.add_mirror_config_channels(arrow_ctl)
 
     # tracking custom trigger
     if side == "R":
@@ -396,7 +397,12 @@ def rig(
         low_pos = 1  # Y
 
     # upper ctl
-    p = upRest_target_crv.getCVs(space="world")[15]
+    # rest index in R side is 14
+    if side == "R":
+        rest_idx = 14
+    else:
+        rest_idx = 15
+    p = upRest_target_crv.getCVs(space="world")[rest_idx]
     ut = transform.setMatrixPosition(datatypes.Matrix(), p)
     npo = primitive.addTransform(over_npo, setName("upBlink_npo"), ut)
 
@@ -412,13 +418,15 @@ def rig(
         color=4,
     )
     attribute.setKeyableAttributes(up_ctl, [trigger_axis])
+    attribute.addAttribute(up_ctl, "isCtl", "bool", keyable=False)
+    attribute.add_mirror_config_channels(up_ctl)
     pm.sets(ctlSet, add=up_ctl)
 
     # use translation of the object to drive the blink
     blink_driver = primitive.addTransform(up_ctl, setName("blink_drv"), ut)
 
     # lowe ctl
-    p_low = lowRest_target_crv.getCVs(space="world")[15]
+    p_low = lowRest_target_crv.getCVs(space="world")[rest_idx]
     p[low_pos] = p_low[low_pos]
     lt = transform.setMatrixPosition(ut, p)
     npo = primitive.addTransform(over_npo, setName("lowBlink_npo"), lt)
@@ -436,6 +444,8 @@ def rig(
     )
     attribute.setKeyableAttributes(low_ctl, [trigger_axis])
     pm.sets(ctlSet, add=low_ctl)
+    attribute.addAttribute(low_ctl, "isCtl", "bool", keyable=False)
+    attribute.add_mirror_config_channels(low_ctl)
 
     # Controls lists
     upControls = []
